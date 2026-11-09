@@ -1,7 +1,14 @@
 import streamlit as st
-# Create an empty transaction list
-if "transactions" not in st.session_state:
-    st.session_state.transactions = []
+
+from database import create_table, add_transaction, get_transactions, delete_transaction
+
+# Initialize the database
+create_table()
+
+# Load saved transactions
+transactions = get_transactions()
+
+
 
 # Page configuration
 st.set_page_config(
@@ -20,7 +27,7 @@ st.write("Track your income, expenses, and savings in one place.")
 total_income = 0
 total_expenses = 0
 
-for transaction in st.session_state.transactions:
+for transaction in transactions:
     if transaction["Type"] == "Income":
         total_income += transaction["Amount"]
     else:
@@ -67,24 +74,68 @@ description = st.text_input(
 
 if st.button("Add Transaction"):
 
-    transaction = {
-        "Type": transaction_type,
-        "Category": category,
-        "Amount": amount,
-        "Description": description
-    }
-
-    st.session_state.transactions.append(transaction)
+    add_transaction(
+        transaction_type,
+        category,
+        amount,
+        description
+    )
 
     st.rerun()
 
     # Display transaction history
 st.header("Transaction History")
 
-if st.session_state.transactions:
+if transactions:
     st.dataframe(
-        st.session_state.transactions,
-        use_container_width=True
+        transactions,
+        use_container_width=True,
+        hide_index=True
     )
 else:
     st.info("No transactions yet. Add your first transaction!")
+
+    # Retrieve all transactions from the database
+def get_transactions():
+    conn = connect_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, type, category, amount, description
+        FROM transactions
+        ORDER BY id DESC
+    """)
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    transactions = []
+
+    for row in rows:
+        transactions.append({
+            "ID": row[0],
+            "Type": row[1],
+            "Category": row[2],
+            "Amount": row[3],
+            "Description": row[4]
+        })
+
+    return transactions
+
+
+    # Delete a transaction
+st.header("Delete Transaction")
+
+if transactions:
+    transaction_ids = [transaction["ID"] for transaction in transactions]
+
+    selected_id = st.selectbox(
+        "Select Transaction ID",
+        transaction_ids
+    )
+
+    if st.button("Delete Transaction"):
+        delete_transaction(selected_id)
+        st.rerun()
+else:
+    st.info("There are no transactions to delete.")
